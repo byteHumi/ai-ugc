@@ -163,6 +163,50 @@ export default function Home() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
+  const getCreatedDateDisplay = useCallback((createdAt?: string) => {
+    if (!createdAt) return '-';
+    const date = new Date(createdAt);
+    if (Number.isNaN(date.getTime())) return createdAt;
+    return date.toLocaleDateString('en-GB');
+  }, []);
+
+  const getScheduledDateDisplay = useCallback((scheduledFor?: string, timezone = 'Asia/Kolkata') => {
+    if (!scheduledFor) return '-';
+    const date = new Date(scheduledFor);
+    if (Number.isNaN(date.getTime())) return scheduledFor;
+
+    const datePart = new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: timezone,
+    }).format(date);
+    const timePart = new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: timezone,
+    }).format(date);
+
+    let offset = 'GMT';
+    try {
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        timeZoneName: 'shortOffset',
+      }).formatToParts(date);
+      offset = parts.find((part) => part.type === 'timeZoneName')?.value || offset;
+    } catch {
+      // Fallback for environments without shortOffset support.
+      const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        timeZoneName: 'short',
+      }).formatToParts(date);
+      offset = parts.find((part) => part.type === 'timeZoneName')?.value || offset;
+    }
+
+    return `${datePart}, ${timePart} ${offset}`;
+  }, []);
+
   const loadJobs = useCallback(async () => {
     try {
       const res = await fetch('/api/jobs');
@@ -1379,9 +1423,25 @@ export default function Home() {
                   const platform = post.platforms?.[0];
                   const status = platform?.status || (post as { status?: string }).status || 'draft';
                   const thumbnail = post.mediaItems?.[0]?.url || post.mediaItems?.[0]?.thumbnailUrl;
-                  const isVideo = thumbnail?.includes('.mp4') || thumbnail?.includes('video') || post.mediaItems?.[0]?.thumbnailUrl;
+                  const isScheduledCard = status === 'scheduled';
+                  const postTimezone = (post as { timezone?: string }).timezone || 'Asia/Kolkata';
+                  const scheduledDisplay = getScheduledDateDisplay(post.scheduledFor, postTimezone);
+                  const createdDisplay = getCreatedDateDisplay(post.createdAt);
                   return (
-                    <div key={post._id} className="flex items-start gap-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5">
+                    <div
+                      key={post._id}
+                      className={`relative flex items-start gap-4 ${
+                        isScheduledCard
+                          ? 'rounded-2xl border-2 border-[#e3e9f3] bg-white p-6'
+                          : 'rounded-xl border border-[var(--border)] bg-[var(--surface)] p-5'
+                      }`}
+                    >
+                      {isScheduledCard && (
+                        <span className="absolute right-6 top-6 inline-flex items-center gap-2 rounded-full border border-blue-300 bg-blue-100 px-5 py-2 font-mono text-xl font-semibold tracking-wide text-blue-700">
+                          <span className="text-base">⏰</span>
+                          Scheduled
+                        </span>
+                      )}
                       {/* Checkbox */}
                       <input type="checkbox" className="mt-2 h-4 w-4 shrink-0 rounded border-[var(--border)] accent-[var(--primary)]" />
 
@@ -1435,46 +1495,56 @@ export default function Home() {
                       {/* Content */}
                       <div className="min-w-0 flex-1">
                         <div className="mb-2 flex items-start justify-between gap-4">
-                          <h3 className="text-lg font-semibold text-[var(--text)]">{post.content || '(No caption)'}</h3>
-                          <span
-                            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${
-                              status === 'published' ? 'bg-[var(--success-bg)] text-[var(--success)]' :
-                              status === 'failed' ? 'bg-[var(--error-bg)] text-[var(--error)]' :
-                              status === 'partial' ? 'bg-orange-100 text-orange-600 border border-orange-200' :
-                              status === 'scheduled' ? 'bg-blue-100 text-blue-600 border border-blue-200' :
-                              (status === 'publishing' || status === 'processing' || status === 'in_progress' || status === 'pending') ? 'bg-amber-100 text-amber-600' :
-                              'bg-[var(--background)] text-[var(--text-muted)]'
-                            }`}
-                          >
-                            {status === 'published' && <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
-                            {(status === 'publishing' || status === 'processing' || status === 'in_progress' || status === 'pending') && <span className="text-base">🚀</span>}
-                            {status === 'scheduled' && <span className="text-base">⏰</span>}
-                            {status === 'partial' && <span className="text-base">⚠️</span>}
-                            {(status === 'publishing' || status === 'processing' || status === 'in_progress' || status === 'pending') ? 'Publishing' : status === 'partial' ? 'Partial' : status.charAt(0).toUpperCase() + status.slice(1)}
-                          </span>
+                          {isScheduledCard ? (
+                            <h3 className="max-w-[calc(100%-180px)] font-mono text-lg font-semibold tracking-wide text-[#3e4a66] md:text-[2.2rem] md:leading-tight">
+                              scheduled: {scheduledDisplay}  •  created: {createdDisplay}  •  by: Internal  •
+                            </h3>
+                          ) : (
+                            <h3 className="text-lg font-semibold text-[var(--text)]">{post.content || '(No caption)'}</h3>
+                          )}
+                          {!isScheduledCard && (
+                            <span
+                              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-sm font-medium ${
+                                status === 'published' ? 'bg-[var(--success-bg)] text-[var(--success)]' :
+                                status === 'failed' ? 'bg-[var(--error-bg)] text-[var(--error)]' :
+                                status === 'partial' ? 'bg-orange-100 text-orange-600 border border-orange-200' :
+                                status === 'scheduled' ? 'bg-blue-100 text-blue-600 border border-blue-200' :
+                                (status === 'publishing' || status === 'processing' || status === 'in_progress' || status === 'pending') ? 'bg-amber-100 text-amber-600' :
+                                'bg-[var(--background)] text-[var(--text-muted)]'
+                              }`}
+                            >
+                              {status === 'published' && <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>}
+                              {(status === 'publishing' || status === 'processing' || status === 'in_progress' || status === 'pending') && <span className="text-base">🚀</span>}
+                              {status === 'scheduled' && <span className="text-base">⏰</span>}
+                              {status === 'partial' && <span className="text-base">⚠️</span>}
+                              {(status === 'publishing' || status === 'processing' || status === 'in_progress' || status === 'pending') ? 'Publishing' : status === 'partial' ? 'Partial' : status.charAt(0).toUpperCase() + status.slice(1)}
+                            </span>
+                          )}
                         </div>
 
-                        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--text-muted)]">
-                          {post.scheduledFor && (
-                            <span>scheduled: {new Date(post.scheduledFor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, {new Date(post.scheduledFor).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</span>
-                          )}
-                          {post.createdAt && <span>created: {new Date(post.createdAt).toLocaleDateString()}</span>}
-                          <span>• by: Internal •</span>
-                        </div>
+                        {!isScheduledCard && (
+                          <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--text-muted)]">
+                            {post.scheduledFor && (
+                              <span>scheduled: {new Date(post.scheduledFor).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}, {new Date(post.scheduledFor).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</span>
+                            )}
+                            {post.createdAt && <span>created: {new Date(post.createdAt).toLocaleDateString()}</span>}
+                            <span>• by: Internal •</span>
+                          </div>
+                        )}
 
                         {/* Post ID */}
-                        <div className="mb-3 flex items-center gap-2 text-sm">
-                          <span className="text-[var(--text-muted)]">id:</span>
-                          <span className="font-mono text-[var(--text)]">{post._id.slice(0, 9)}...</span>
+                        <div className={`mb-3 flex items-center gap-2 ${isScheduledCard ? 'font-mono text-[1.05rem] text-[#3e4a66]' : 'text-sm'}`}>
+                          <span className={isScheduledCard ? 'text-[#3e4a66]' : 'text-[var(--text-muted)]'}>id:</span>
+                          <span className={isScheduledCard ? 'font-mono tracking-wide text-[#3e4a66]' : 'font-mono text-[var(--text)]'}>{post._id.slice(0, 9)}...</span>
                           <button
                             onClick={() => {
                               navigator.clipboard.writeText(post._id);
                               showToast('ID copied!', 'success');
                             }}
-                            className="rounded p-1 hover:bg-[var(--background)]"
+                            className={isScheduledCard ? 'rounded-lg border border-[#d9e1ee] bg-white p-2 text-[#3e4a66] hover:bg-[#f7faff]' : 'rounded p-1 hover:bg-[var(--background)]'}
                             title="Copy ID"
                           >
-                            <svg className="h-4 w-4 text-[var(--text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className={`h-4 w-4 ${isScheduledCard ? 'text-[#3e4a66]' : 'text-[var(--text-muted)]'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                           </button>
@@ -1482,17 +1552,17 @@ export default function Home() {
 
                         {/* Platforms */}
                         <div className="flex items-center gap-2">
-                          <span className="text-sm text-[var(--text-muted)]">platforms:</span>
+                          <span className={isScheduledCard ? 'font-mono text-[1.05rem] text-[#3e4a66]' : 'text-sm text-[var(--text-muted)]'}>platforms:</span>
                           <div className="flex flex-wrap gap-2">
                             {post.platforms?.map((p) => {
                               const pStatus = p.status || 'pending';
                               const isPublishing = pStatus === 'publishing' || pStatus === 'processing' || pStatus === 'in_progress' || pStatus === 'pending';
                               const isScheduled = pStatus === 'scheduled';
-                              const isPartial = pStatus === 'partial';
                               return (
                                 <span
                                   key={p.platform}
                                   className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm font-medium ${
+                                    isScheduledCard ? 'rounded-xl border-amber-300 bg-amber-50 px-4 py-2 font-mono text-amber-700' :
                                     pStatus === 'published' ? 'border-[var(--success)] bg-[var(--success-bg)] text-[var(--success)]' :
                                     pStatus === 'failed' ? 'border-[var(--error)] bg-[var(--error-bg)] text-[var(--error)]' :
                                     isScheduled ? 'border-amber-300 bg-amber-50 text-amber-700' :
@@ -1524,6 +1594,9 @@ export default function Home() {
                                       </svg>
                                     </a>
                                   )}
+                                  {isScheduledCard && p.platform === 'tiktok' && (
+                                    <span className="h-2.5 w-2.5 rounded-full bg-amber-500" />
+                                  )}
                                 </span>
                               );
                             })}
@@ -1532,7 +1605,7 @@ export default function Home() {
                       </div>
 
                       {/* Actions */}
-                      <div className="flex shrink-0 flex-col gap-2 self-end">
+                      <div className={`flex shrink-0 gap-2 self-end ${isScheduledCard ? 'flex-row' : 'flex-col'}`}>
                         {(status === 'failed' || status === 'partial') && (
                           <button
                             onClick={async () => {
@@ -1567,7 +1640,9 @@ export default function Home() {
                               // TODO: Open edit modal for scheduled post
                               showToast('Edit feature coming soon', 'success');
                             }}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:opacity-80"
+                            className={isScheduledCard
+                              ? 'inline-flex items-center gap-2 rounded-xl border border-blue-300 bg-blue-50 px-5 py-2.5 font-mono text-xl font-semibold tracking-wide text-blue-700 hover:bg-blue-100'
+                              : 'inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-3 py-2 text-sm font-medium text-blue-600 hover:opacity-80'}
                           >
                             <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -1588,7 +1663,9 @@ export default function Home() {
                             }
                           }}
                           disabled={isDeletingPost === post._id}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--error)] bg-[var(--error-bg)] px-3 py-2 text-sm font-medium text-[var(--error)] hover:opacity-80 disabled:opacity-50"
+                          className={isScheduledCard
+                            ? 'inline-flex items-center gap-2 rounded-xl border border-rose-300 bg-rose-50 px-5 py-2.5 font-mono text-xl font-semibold tracking-wide text-rose-700 hover:bg-rose-100 disabled:opacity-50'
+                            : 'inline-flex items-center gap-1.5 rounded-lg border border-[var(--error)] bg-[var(--error-bg)] px-3 py-2 text-sm font-medium text-[var(--error)] hover:opacity-80 disabled:opacity-50'}
                         >
                           {isDeletingPost === post._id ? (
                             <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">

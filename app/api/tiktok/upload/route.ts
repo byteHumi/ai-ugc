@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
             allowStitch: true,
             contentPreviewConfirmed: true,
             expressConsentGiven: true,
-            videoMadeWithAi: true, // AI-generated content disclosure
+            videoMadeWithAi: false,
             videoCoverTimestampMs: 1000, // Default cover at 1 second
           },
         },
@@ -267,28 +267,40 @@ export async function POST(request: NextRequest) {
     // --- Step 5: Store post in our database ---
     log('DB', `Saving post to database with status: ${dbStatus}`);
 
-    const dbPost = await createPost({
-      jobId: jobId || null,
-      accountId: null, // Don't use Late account ID as local FK
-      lateAccountId: accountId, // Store Late API account ID separately
-      caption: caption || '',
-      videoUrl: finalVideoUrl,
-      platform: 'tiktok',
-      status: dbStatus,
-      scheduledFor: scheduledFor || null,
-      latePostId: latePostId,
-      platformPostUrl: platformPostUrl,
-    });
+    let dbPost: Awaited<ReturnType<typeof createPost>> | null = null;
+    let dbWarning: string | undefined;
+    try {
+      dbPost = await createPost({
+        jobId: jobId || null,
+        accountId: null, // Don't use Late account ID as local FK
+        lateAccountId: accountId, // Store Late API account ID separately
+        caption: caption || '',
+        videoUrl: finalVideoUrl,
+        platform: 'tiktok',
+        status: dbStatus,
+        scheduledFor: scheduledFor || null,
+        latePostId: latePostId,
+        platformPostUrl: platformPostUrl,
+      });
+    } catch (dbError) {
+      dbWarning = `Local DB save failed after Late post creation: ${(dbError as Error).message}`;
+      logError('DB', dbWarning);
+    }
 
     // If published, update with published metadata
     if (dbStatus === 'published' && dbPost?.id) {
-      await updatePost(dbPost.id, {
-        publishedAt: tiktokPlatform?.publishedAt || new Date().toISOString(),
-        externalPostId: platformPostId,
-        platformPostUrl: platformPostUrl,
-        publishAttempts: 1,
-        lastCheckedAt: new Date().toISOString(),
-      });
+      try {
+        await updatePost(dbPost.id, {
+          publishedAt: tiktokPlatform?.publishedAt || new Date().toISOString(),
+          externalPostId: platformPostId,
+          platformPostUrl: platformPostUrl,
+          publishAttempts: 1,
+          lastCheckedAt: new Date().toISOString(),
+        });
+      } catch (dbError) {
+        dbWarning = `Local DB update failed after Late post creation: ${(dbError as Error).message}`;
+        logError('DB', dbWarning);
+      }
     }
 
     const totalMs = Date.now() - startTime;
@@ -319,6 +331,8 @@ export async function POST(request: NextRequest) {
         platforms: latePost.platforms,
       },
       message,
+      warning: dbWarning,
+      storedLocally: !!dbPost,
       timing: {
         downloadMs,
         uploadMs: Date.now() - uploadStart,
