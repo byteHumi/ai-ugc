@@ -1,0 +1,191 @@
+'use client';
+
+import { useRef } from 'react';
+import { X, Video, Type, Music, Film, Upload } from 'lucide-react';
+import type { MiniAppStep, MiniAppType, VideoGenConfig as VGC, TextOverlayConfig as TOC, BgMusicConfig as BMC, AttachVideoConfig as AVC } from '@/types';
+import VideoGenConfig from './VideoGenConfig';
+import TextOverlayConfig from './TextOverlayConfig';
+import BgMusicConfig from './BgMusicConfig';
+import AttachVideoConfig from './AttachVideoConfig';
+import TextOverlayPreview from './TextOverlayPreview';
+
+const nodeMeta: Record<MiniAppType, { label: string; icon: typeof Video; iconBg: string; iconColor: string }> = {
+  'video-generation': { label: 'Video Generation', icon: Video, iconBg: '#f3f0ff', iconColor: '#7c3aed' },
+  'text-overlay':     { label: 'Text Overlay',     icon: Type,  iconBg: '#eff6ff', iconColor: '#2563eb' },
+  'bg-music':         { label: 'Background Music', icon: Music, iconBg: '#ecfdf5', iconColor: '#059669' },
+  'attach-video':     { label: 'Attach Video',     icon: Film,  iconBg: '#fff7ed', iconColor: '#ea580c' },
+};
+
+type SourceConfig = {
+  videoSource: 'tiktok' | 'upload';
+  tiktokUrl: string;
+  videoUrl: string;
+  uploadedFilename: string;
+  isUploading: boolean;
+  uploadProgress: number;
+  onVideoSourceChange: (src: 'tiktok' | 'upload') => void;
+  onTiktokUrlChange: (url: string) => void;
+  onVideoUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onVideoRemove: () => void;
+};
+
+export default function NodeConfigPanel({
+  selectedId, steps, onUpdateStep, onRemoveStep, onClose, sourceConfig, videoUrl,
+}: {
+  selectedId: string | null;
+  steps: MiniAppStep[];
+  onUpdateStep: (id: string, step: MiniAppStep) => void;
+  onRemoveStep: (id: string) => void;
+  onClose: () => void;
+  sourceConfig: SourceConfig;
+  videoUrl?: string;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const step = selectedId && selectedId !== 'source' ? steps.find((s) => s.id === selectedId) : null;
+
+  /* ── Source node ── */
+  if (selectedId === 'source') {
+    return (
+      <div className="h-full border-l border-[var(--border)] bg-[var(--surface)]">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100">
+              <Upload className="h-3.5 w-3.5 text-gray-500" />
+            </div>
+            <span className="text-sm font-semibold text-[var(--text)]">Video Source</span>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-gray-400 transition-colors hover:text-gray-600">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="p-4 space-y-4">
+          <div className="flex gap-2">
+            {(['tiktok', 'upload'] as const).map((src) => (
+              <button
+                key={src}
+                onClick={() => sourceConfig.onVideoSourceChange(src)}
+                className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-150 ${
+                  sourceConfig.videoSource === src
+                    ? 'bg-gray-900 text-white'
+                    : 'border border-[var(--border)] text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                }`}
+              >
+                {src === 'tiktok' ? 'TikTok URL' : 'Upload Video'}
+              </button>
+            ))}
+          </div>
+
+          {sourceConfig.videoSource === 'tiktok' ? (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">TikTok URL</label>
+              <input
+                value={sourceConfig.tiktokUrl}
+                onChange={(e) => sourceConfig.onTiktokUrlChange(e.target.value)}
+                placeholder="https://www.tiktok.com/@user/video/..."
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+              />
+            </div>
+          ) : (
+            <div>
+              <label className="mb-1 block text-xs font-medium text-gray-500">Video File</label>
+              <input ref={fileRef} type="file" accept="video/*" onChange={sourceConfig.onVideoUpload} className="hidden" />
+              {sourceConfig.videoUrl ? (
+                <div className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-2.5">
+                  <video src={sourceConfig.videoUrl} className="h-16 w-12 shrink-0 rounded-lg object-cover bg-gray-950" muted playsInline preload="metadata" onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate text-xs font-medium text-[var(--text)]">{sourceConfig.uploadedFilename}</p>
+                    <button onClick={sourceConfig.onVideoRemove} className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-400 hover:text-red-500 transition-colors">
+                      <X className="h-3 w-3" /> Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  disabled={sourceConfig.isUploading}
+                  className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-[var(--background)] py-6 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                >
+                  {sourceConfig.isUploading ? (
+                    <>
+                      <div className="h-6 w-6 rounded-full border-2 border-gray-300 border-t-gray-900 animate-spin" />
+                      <span className="text-xs tabular-nums text-gray-500">Uploading\u2026 {sourceConfig.uploadProgress}%</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
+                        <Upload className="h-3.5 w-3.5 text-gray-400" />
+                      </div>
+                      <span className="text-xs text-gray-400">Click to upload video</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+          <p className="text-[10px] text-gray-400">
+            Not needed if the first step is Video Generation with Subtle Animation mode.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Pipeline step ── */
+  if (step) {
+    const meta = nodeMeta[step.type];
+    const Icon = meta.icon;
+
+    return (
+      <div className="flex h-full flex-col border-l border-[var(--border)] bg-[var(--surface)]">
+        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3.5">
+          <div className="flex items-center gap-2.5">
+            <div
+              className="flex h-7 w-7 items-center justify-center rounded-lg"
+              style={{ backgroundColor: meta.iconBg }}
+            >
+              <Icon className="h-3.5 w-3.5" style={{ color: meta.iconColor }} />
+            </div>
+            <span className="text-sm font-semibold text-[var(--text)]">{meta.label}</span>
+          </div>
+          <button onClick={onClose} className="rounded-md p-1 text-gray-400 transition-colors hover:text-gray-600">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {step.type === 'text-overlay' && (
+            <TextOverlayPreview
+              config={step.config as TOC}
+              onChange={(c) => onUpdateStep(step.id, { ...step, config: c })}
+              videoUrl={videoUrl}
+            />
+          )}
+          {step.type === 'video-generation' && <VideoGenConfig config={step.config as VGC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} />}
+          {step.type === 'text-overlay' && <TextOverlayConfig config={step.config as TOC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} />}
+          {step.type === 'bg-music' && <BgMusicConfig config={step.config as BMC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} />}
+          {step.type === 'attach-video' && <AttachVideoConfig config={step.config as AVC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} steps={steps} currentStepId={step.id} />}
+        </div>
+
+        <div className="border-t border-[var(--border)] p-4">
+          <button
+            onClick={() => { onRemoveStep(step.id); onClose(); }}
+            className="w-full rounded-lg border border-gray-200 py-2 text-xs font-medium text-gray-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+          >
+            Remove Step
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Empty state ── */
+  return (
+    <div className="flex h-full flex-col items-center justify-center border-l border-[var(--border)] bg-[var(--surface)] p-6 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100">
+        <Video className="h-5 w-5 text-gray-400" />
+      </div>
+      <p className="text-sm font-medium text-gray-600">Select a step</p>
+      <p className="mt-1 text-xs text-gray-400">Click a node to edit its settings</p>
+    </div>
+  );
+}
