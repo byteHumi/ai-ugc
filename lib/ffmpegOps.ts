@@ -185,43 +185,71 @@ export function mixAudio(
 }
 
 /**
- * Concatenate multiple videos using ffmpeg concat demuxer.
- * Tries stream copy first, falls back to re-encode.
+ * Concatenate multiple videos using ffmpeg concat filter.
+ * Normalizes resolution, framerate, and pixel format so mixed-source videos work.
  */
 export function concatVideos(videoPaths: string[], outputPath: string): void {
-  const tempDir = getTempDir();
-  const listFile = path.join(tempDir, `concat-${Date.now()}.txt`);
-
+  // Probe the first video to get target resolution
+  let targetW = 720;
+  let targetH = 1280;
   try {
-    // Write concat list file
-    const listContent = videoPaths.map((p) => `file '${p}'`).join('\n');
-    fs.writeFileSync(listFile, listContent);
+    const probe = execFileSync('ffprobe', [
+      '-v', 'error',
+      '-select_streams', 'v:0',
+      '-show_entries', 'stream=width,height',
+      '-of', 'csv=p=0:s=x',
+      videoPaths[0],
+    ], { encoding: 'utf-8' }).trim();
+    const [w, h] = probe.split('x').map(Number);
+    if (w > 0 && h > 0) { targetW = w; targetH = h; }
+  } catch {}
 
+  const n = videoPaths.length;
+  const inputs: string[] = [];
+  videoPaths.forEach((p) => { inputs.push('-i', p); });
+
+  // Build filter: scale + pad each input to target size, add silent audio if missing, then concat
+  const filters: string[] = [];
+  const concatInputs: string[] = [];
+
+  for (let i = 0; i < n; i++) {
+    // Check if this input has audio
+    let hasAudio = false;
     try {
-      // Try stream copy first (fast, but only works with same codecs)
-      execFileSync('ffmpeg', [
-        '-y',
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', listFile,
-        '-c', 'copy',
-        outputPath,
-      ]);
-    } catch {
-      // Fall back to re-encode (slower but handles different codecs)
-      console.log('[FFmpeg] Concat copy failed, re-encoding...');
-      execFileSync('ffmpeg', [
-        '-y',
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', listFile,
-        '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-c:a', 'aac',
-        outputPath,
-      ]);
+      const audioProbe = execFileSync('ffprobe', [
+        '-v', 'error', '-select_streams', 'a', '-show_entries', 'stream=index', '-of', 'csv=p=0',
+        videoPaths[i],
+      ], { encoding: 'utf-8' });
+      hasAudio = audioProbe.trim().length > 0;
+    } catch {}
+
+    filters.push(
+      `[${i}:v]scale=${targetW}:${targetH}:force_original_aspect_ratio=decrease,` +
+      `pad=${targetW}:${targetH}:(ow-iw)/2:(oh-ih)/2,` +
+      `setsar=1,fps=30,format=yuv420p[v${i}]`
+    );
+
+    if (hasAudio) {
+      filters.push(`[${i}:a]aformat=sample_rates=44100:channel_layouts=stereo[a${i}]`);
+    } else {
+      filters.push(`anullsrc=r=44100:cl=stereo[a${i}]`);
     }
-  } finally {
-    try { fs.unlinkSync(listFile); } catch {}
+
+    concatInputs.push(`[v${i}][a${i}]`);
   }
+
+  filters.push(`${concatInputs.join('')}concat=n=${n}:v=1:a=1[vout][aout]`);
+
+  execFileSync('ffmpeg', [
+    '-y',
+    ...inputs,
+    '-filter_complex', filters.join(';'),
+    '-map', '[vout]',
+    '-map', '[aout]',
+    '-c:v', 'libx264',
+    '-preset', 'fast',
+    '-c:a', 'aac',
+    '-shortest',
+    outputPath,
+  ]);
 }

@@ -3,8 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { TemplateJob } from '@/types';
 
-const REFRESH_INTERVAL = 60_000;
-const ACTIVE_POLL_INTERVAL = 2_000;
+const ACTIVE_POLL_INTERVAL = 4_000;
 const CACHE_KEY = 'ai-ugc-template-jobs';
 
 function getCachedJobs(): TemplateJob[] {
@@ -43,13 +42,9 @@ export function useTemplates() {
     }
   }, []);
 
+  // Fetch once on mount, then only poll when jobs are active
   useEffect(() => {
     loadJobs();
-  }, [loadJobs]);
-
-  useEffect(() => {
-    const id = setInterval(loadJobs, REFRESH_INTERVAL);
-    return () => clearInterval(id);
   }, [loadJobs]);
 
   useEffect(() => {
