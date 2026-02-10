@@ -64,7 +64,7 @@ export default function TemplateJobList({ jobs }: { jobs: TemplateJob[] }) {
 
                 {hasVideo && (
                   <video
-                    src={job.outputUrl}
+                    src={job.signedUrl || job.outputUrl}
                     className="h-16 w-12 shrink-0 rounded object-cover"
                     muted
                     playsInline
@@ -138,11 +138,11 @@ export default function TemplateJobList({ jobs }: { jobs: TemplateJob[] }) {
               </div>
             )}
 
-            {selectedJob.status === 'completed' && selectedJob.outputUrl && (
+            {selectedJob.status === 'completed' && (selectedJob.signedUrl || selectedJob.outputUrl) && (
               <div>
                 <h4 className="mb-1 text-xs font-medium text-[var(--text-muted)]">Output</h4>
                 <video
-                  src={selectedJob.outputUrl}
+                  src={selectedJob.signedUrl || selectedJob.outputUrl}
                   controls
                   className="w-full rounded-lg"
                   preload="metadata"
@@ -150,7 +150,7 @@ export default function TemplateJobList({ jobs }: { jobs: TemplateJob[] }) {
                 <button
                   onClick={() => {
                     setSelectedJob(null);
-                    router.push(`/posts?createPost=true&videoUrl=${encodeURIComponent(selectedJob.outputUrl!)}`);
+                    router.push(`/posts?createPost=true&videoUrl=${encodeURIComponent(selectedJob.signedUrl || selectedJob.outputUrl!)}`);
                   }}
                   className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--primary)] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:opacity-90"
                 >

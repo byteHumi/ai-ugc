@@ -1,12 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createTemplateJob, getAllTemplateJobs, initDatabase } from '@/lib/db';
+import { getSignedUrlFromPublicUrl } from '@/lib/storage';
 import { processTemplateJob } from '@/lib/processTemplateJob';
 
 export async function GET() {
   try {
     await initDatabase();
     const jobs = await getAllTemplateJobs();
-    return NextResponse.json(jobs);
+
+    // Generate signed URLs for completed jobs with GCS output
+    const jobsWithSignedUrls = await Promise.all(
+      jobs.map(async (job: { outputUrl?: string; [key: string]: unknown }) => {
+        if (job.outputUrl && job.outputUrl.includes('storage.googleapis.com')) {
+          try {
+            const signedUrl = await getSignedUrlFromPublicUrl(job.outputUrl);
+            return { ...job, signedUrl };
+          } catch {
+            return { ...job, signedUrl: job.outputUrl };
+          }
+        }
+        return job;
+      })
+    );
+
+    return NextResponse.json(jobsWithSignedUrls);
   } catch (err) {
     console.error('List template jobs error:', err);
     return NextResponse.json({ error: 'Failed to list template jobs' }, { status: 500 });

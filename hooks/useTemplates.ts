@@ -32,7 +32,7 @@ export function useTemplates() {
       const res = await fetch('/api/templates');
       const data = await res.json();
       const arr: TemplateJob[] = Array.isArray(data) ? data : [];
-      const snapshot = JSON.stringify(arr.map((j) => `${j.id}:${j.status}:${j.step}:${j.currentStep}`));
+      const snapshot = JSON.stringify(arr.map((j) => `${j.id}:${j.status}:${j.step}:${j.currentStep}:${j.signedUrl || ''}`));
       if (snapshot !== lastSnapshotRef.current) {
         lastSnapshotRef.current = snapshot;
         setJobs(arr);

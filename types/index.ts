@@ -142,6 +142,7 @@ export type TemplateJob = {
   tiktokUrl?: string;
   videoUrl?: string;
   outputUrl?: string;
+  signedUrl?: string;
   error?: string;
   createdAt: string;
   completedAt?: string;
