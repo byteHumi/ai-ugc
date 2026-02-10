@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Sparkles, UserCircle, Package, FileText, Link2, ListVideo, LayoutTemplate } from 'lucide-react';
+import { Sparkles, UserCircle, Package, FileText, Link2, ListVideo, LayoutTemplate, ClipboardList } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -18,6 +18,7 @@ import {
 const navItems = [
   { href: '/generate', label: 'Generate', icon: Sparkles },
   { href: '/templates', label: 'Templates', icon: LayoutTemplate },
+  { href: '/jobs', label: 'Jobs', icon: ClipboardList },
   { href: '/queue', label: 'Queue', icon: ListVideo },
   { href: '/models', label: 'Models', icon: UserCircle },
   { href: '/batches', label: 'Batches', icon: Package },

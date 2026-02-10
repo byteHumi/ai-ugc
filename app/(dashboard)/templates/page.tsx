@@ -1,34 +1,64 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Save, BookOpen, Trash2 } from 'lucide-react';
-import { useTemplates } from '@/hooks/useTemplates';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Save, BookOpen, Trash2, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { usePresets } from '@/hooks/usePresets';
 import { useVideoUpload } from '@/hooks/useVideoUpload';
 import { useToast } from '@/hooks/useToast';
 import PipelineBuilder from '@/components/templates/PipelineBuilder';
 import NodeConfigPanel from '@/components/templates/NodeConfigPanel';
-import TemplateJobList from '@/components/templates/TemplateJobList';
-import RefreshButton from '@/components/ui/RefreshButton';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import Spinner from '@/components/ui/Spinner';
 import Modal from '@/components/ui/Modal';
 import type { MiniAppStep } from '@/types';
 
+const DRAFT_KEY = 'ai-ugc-pipeline-draft';
+
+type PipelineDraft = {
+  steps: MiniAppStep[];
+  name: string;
+  videoSource: 'tiktok' | 'upload';
+  tiktokUrl: string;
+  videoUrl: string;
+  uploadedFilename: string;
+  sourceDuration?: number;
+};
+
+function loadDraft(): PipelineDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return null;
+}
+
 export default function TemplatesPage() {
-  const { jobs, refresh } = useTemplates();
+  const router = useRouter();
   const { presets, savePreset, deletePreset } = usePresets();
   const { uploadVideo, isUploading, progress } = useVideoUpload();
   const { showToast } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
 
+  // Restore draft from sessionStorage on mount
+  const draft = useRef(loadDraft());
+
   // Pipeline state
-  const [steps, setSteps] = useState<MiniAppStep[]>([]);
-  const [name, setName] = useState('');
-  const [videoSource, setVideoSource] = useState<'tiktok' | 'upload'>('tiktok');
-  const [tiktokUrl, setTiktokUrl] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [uploadedFilename, setUploadedFilename] = useState('');
+  const [steps, setSteps] = useState<MiniAppStep[]>(() => draft.current?.steps ?? []);
+  const [name, setName] = useState(() => draft.current?.name ?? '');
+  const [videoSource, setVideoSource] = useState<'tiktok' | 'upload'>(() => draft.current?.videoSource ?? 'tiktok');
+  const [tiktokUrl, setTiktokUrl] = useState(() => draft.current?.tiktokUrl ?? '');
+  const [videoUrl, setVideoUrl] = useState(() => draft.current?.videoUrl ?? '');
+  const [uploadedFilename, setUploadedFilename] = useState(() => draft.current?.uploadedFilename ?? '');
+  const [sourceDuration, setSourceDuration] = useState<number | undefined>(() => draft.current?.sourceDuration);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-save draft to sessionStorage on changes
+  useEffect(() => {
+    const d: PipelineDraft = { steps, name, videoSource, tiktokUrl, videoUrl, uploadedFilename, sourceDuration };
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch {}
+  }, [steps, name, videoSource, tiktokUrl, videoUrl, uploadedFilename, sourceDuration]);
 
   // UI state
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
@@ -36,9 +66,62 @@ export default function TemplatesPage() {
   const [showSavePreset, setShowSavePreset] = useState(false);
   const [presetName, setPresetName] = useState('');
 
+  // Sidebar resize + responsive
+  const [panelWidth, setPanelWidth] = useState(380);
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [isMobile, setIsMobile] = useState(false);
+  const isDragging = useRef(false);
+  const dragStartX = useRef(0);
+  const dragStartW = useRef(0);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  const onDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDragging.current = true;
+    dragStartX.current = e.clientX;
+    dragStartW.current = panelWidth;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return;
+      const delta = dragStartX.current - ev.clientX;
+      setPanelWidth(Math.max(280, Math.min(600, dragStartW.current + delta)));
+    };
+    const onUp = () => {
+      isDragging.current = false;
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, [panelWidth]);
+
   const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Detect video duration from the file
+    const objectUrl = URL.createObjectURL(file);
+    const vid = document.createElement('video');
+    vid.preload = 'metadata';
+    vid.onloadedmetadata = () => {
+      if (vid.duration && isFinite(vid.duration)) {
+        setSourceDuration(Math.round(vid.duration));
+      }
+      URL.revokeObjectURL(objectUrl);
+    };
+    vid.onerror = () => URL.revokeObjectURL(objectUrl);
+    vid.src = objectUrl;
+
     try {
       const result = await uploadVideo(file);
       if (result) {
@@ -98,7 +181,8 @@ export default function TemplatesPage() {
     }
 
     const firstStep = enabledSteps[0];
-    const needsInputVideo = firstStep.type !== 'video-generation';
+    const needsInputVideo = !(firstStep.type === 'video-generation'
+      && (firstStep.config as { mode?: string }).mode === 'subtle-animation');
 
     if (needsInputVideo) {
       if (videoSource === 'tiktok' && !tiktokUrl) {
@@ -133,7 +217,8 @@ export default function TemplatesPage() {
       }
 
       showToast('Pipeline started!', 'success');
-      await refresh();
+      try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
+      router.push('/jobs');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to start pipeline', 'error');
     } finally {
@@ -144,93 +229,123 @@ export default function TemplatesPage() {
   return (
     <div className="-m-8">
       {/* Top bar */}
-      <div className="flex items-center justify-between border-b border-[var(--border)] px-6 py-3">
-        <div className="flex items-center gap-4">
-          <div>
-            <h1 className="text-lg font-bold">Templates</h1>
-            <p className="text-xs text-[var(--text-muted)]">Build multi-step video pipelines</p>
-          </div>
+      <div className="flex items-center justify-between px-4 py-3 md:px-6">
+        <div className="shrink-0">
+          <h1 className="text-2xl font-bold tracking-tight">Templates</h1>
+          <p className="text-xs text-[var(--text-muted)]">Build multi-step video pipelines</p>
+        </div>
+
+        <div className="flex items-center gap-1.5">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             placeholder="Pipeline name..."
-            className="rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-1.5 text-sm"
+            className="h-8 w-[160px] rounded-md bg-[var(--surface)] px-2.5 text-sm shadow-sm backdrop-blur-xl placeholder:text-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-[var(--accent-border)]"
           />
-        </div>
-        <div className="flex items-center gap-2">
-          {/* Presets */}
-          <button
-            onClick={() => setShowPresets(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--background)]"
-          >
-            <BookOpen className="h-3.5 w-3.5" /> Presets
-          </button>
-          <button
-            onClick={() => setShowSavePreset(true)}
-            disabled={steps.length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--border)] px-3 py-1.5 text-xs font-medium hover:bg-[var(--background)] disabled:opacity-50"
-          >
-            <Save className="h-3.5 w-3.5" /> Save
-          </button>
-
-          {/* Run */}
-          <button
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" onClick={() => setShowPresets(true)}>
+                <BookOpen className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Presets</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" onClick={() => setShowSavePreset(true)} disabled={steps.length === 0}>
+                <Save className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Save preset</TooltipContent>
+          </Tooltip>
+          <Button
+            size="sm"
             onClick={handleRun}
             disabled={isSubmitting || steps.filter((s) => s.enabled).length === 0}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary)] px-4 py-1.5 text-xs font-medium text-white disabled:opacity-50"
           >
-            {isSubmitting ? <><Spinner className="h-3.5 w-3.5" /> Running...</> : 'Run Pipeline'}
-          </button>
-
-          <RefreshButton onClick={refresh} />
+            {isSubmitting ? <Spinner className="h-3.5 w-3.5" /> : 'Run'}
+          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-sm" onClick={() => setPanelOpen(!panelOpen)}>
+                {panelOpen ? <PanelRightClose className="h-3.5 w-3.5" /> : <PanelRightOpen className="h-3.5 w-3.5" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{panelOpen ? 'Hide panel' : 'Show panel'}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
       {/* Main area: Canvas + Config Panel */}
       <div className="flex" style={{ height: 'calc(100vh - 7.5rem)' }}>
         {/* Left: Flow canvas + jobs */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
           <PipelineBuilder
             steps={steps}
             onChange={setSteps}
             selectedId={selectedNodeId}
-            onSelect={setSelectedNodeId}
+            onSelect={(id) => { setSelectedNodeId(id); if (isMobile && id) setPanelOpen(true); }}
             videoSource={videoSource}
             tiktokUrl={tiktokUrl}
             videoUrl={videoUrl}
           />
-
-          {/* Recent Jobs */}
-          <div className="mt-8">
-            <h2 className="mb-3 text-sm font-semibold">Recent Jobs</h2>
-            <TemplateJobList jobs={jobs} />
-          </div>
         </div>
 
-        {/* Right: Config Panel */}
-        <div className="w-[380px] shrink-0 overflow-y-auto">
-          <input ref={fileRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
-          <NodeConfigPanel
-            selectedId={selectedNodeId}
-            steps={steps}
-            onUpdateStep={handleUpdateStep}
-            onRemoveStep={handleRemoveStep}
-            onClose={() => setSelectedNodeId(null)}
-            sourceConfig={{
-              videoSource,
-              tiktokUrl,
-              videoUrl,
-              uploadedFilename,
-              isUploading,
-              uploadProgress: progress,
-              onVideoSourceChange: setVideoSource,
-              onTiktokUrlChange: setTiktokUrl,
-              onVideoUpload: (e) => handleVideoUpload(e),
-              onVideoRemove: () => { setVideoUrl(''); setUploadedFilename(''); },
-            }}
-            videoUrl={videoSource === 'upload' ? videoUrl : undefined}
-          />
-        </div>
+        {/* Right: Config Panel (resizable) */}
+        {panelOpen && (
+          <>
+            {/* Mobile overlay backdrop */}
+            {isMobile && (
+              <div
+                className="fixed inset-0 z-30 bg-black/30"
+                onClick={() => setPanelOpen(false)}
+              />
+            )}
+
+            <div
+              className={`relative shrink-0 ${
+                isMobile
+                  ? 'fixed right-0 top-0 z-40 h-full w-[85vw] max-w-[420px] shadow-2xl'
+                  : 'my-3 mr-3 overflow-hidden overflow-y-auto rounded-2xl bg-[var(--surface)] shadow-lg backdrop-blur-xl'
+              }`}
+              style={isMobile ? undefined : { width: panelWidth }}
+            >
+              {/* Drag handle — slim pill slider */}
+              {!isMobile && (
+                <div
+                  onMouseDown={onDragStart}
+                  className="absolute left-0 top-0 z-10 flex h-full w-4 cursor-col-resize items-center justify-center"
+                  style={{ marginLeft: -8 }}
+                >
+                  <div className="h-8 w-1 rounded-full bg-[var(--text-muted)]/30 transition-colors hover:bg-[var(--text-muted)]/60" />
+                </div>
+              )}
+
+              <input ref={fileRef} type="file" accept="video/*" onChange={handleVideoUpload} className="hidden" />
+              <NodeConfigPanel
+                selectedId={selectedNodeId}
+                steps={steps}
+                onUpdateStep={handleUpdateStep}
+                onRemoveStep={handleRemoveStep}
+                onClose={() => { setSelectedNodeId(null); if (isMobile) setPanelOpen(false); }}
+                sourceConfig={{
+                  videoSource,
+                  tiktokUrl,
+                  videoUrl,
+                  uploadedFilename,
+                  isUploading,
+                  uploadProgress: progress,
+                  onVideoSourceChange: setVideoSource,
+                  onTiktokUrlChange: setTiktokUrl,
+                  onVideoUpload: (e) => handleVideoUpload(e),
+                  onVideoRemove: () => { setVideoUrl(''); setUploadedFilename(''); setSourceDuration(undefined); },
+                }}
+                videoUrl={videoSource === 'upload' ? videoUrl : undefined}
+                sourceDuration={sourceDuration}
+              />
+            </div>
+          </>
+        )}
       </div>
 
       {/* Presets Modal */}

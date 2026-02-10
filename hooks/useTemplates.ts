@@ -5,9 +5,25 @@ import type { TemplateJob } from '@/types';
 
 const REFRESH_INTERVAL = 60_000;
 const ACTIVE_POLL_INTERVAL = 2_000;
+const CACHE_KEY = 'ai-ugc-template-jobs';
+
+function getCachedJobs(): TemplateJob[] {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function setCachedJobs(jobs: TemplateJob[]) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(jobs)); } catch {}
+}
 
 export function useTemplates() {
-  const [jobs, setJobs] = useState<TemplateJob[]>([]);
+  const [jobs, setJobs] = useState<TemplateJob[]>(getCachedJobs);
   const activePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastSnapshotRef = useRef('');
 
@@ -20,6 +36,7 @@ export function useTemplates() {
       if (snapshot !== lastSnapshotRef.current) {
         lastSnapshotRef.current = snapshot;
         setJobs(arr);
+        setCachedJobs(arr);
       }
     } catch (e) {
       console.error('Failed to load template jobs:', e);

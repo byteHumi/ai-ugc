@@ -5,9 +5,10 @@ import type { Model, ModelImage } from '@/types';
 
 const REFRESH_INTERVAL = 60_000;
 
-// Module-level cache
+// Module-level caches
 let _cache: Model[] = [];
 let _cacheTime = 0;
+const _imageCache = new Map<string, ModelImage[]>();
 
 export function useModels() {
   const [models, setModels] = useState<Model[]>(_cache);
@@ -36,10 +37,17 @@ export function useModels() {
   }, []);
 
   const loadModelImages = useCallback(async (modelId: string) => {
+    // Serve from cache instantly, then refresh in background
+    const cached = _imageCache.get(modelId);
+    if (cached) {
+      setModelImages(cached);
+    }
     try {
       const res = await fetch(`/api/models/${modelId}/images`);
       const data = await res.json();
-      setModelImages(Array.isArray(data) ? data : []);
+      const images = Array.isArray(data) ? data : [];
+      _imageCache.set(modelId, images);
+      setModelImages(images);
     } catch (e) {
       console.error('Failed to load model images:', e);
     }

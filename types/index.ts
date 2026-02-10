@@ -82,6 +82,13 @@ export type VideoGenConfig = {
   imageUrl?: string;
   prompt?: string;
   maxSeconds?: number;
+  // Shared settings (toolbar controls)
+  aspectRatio?: string;            // '9:16' | '16:9' | 'auto'
+  duration?: string;               // Veo: '4s'|'6s'|'8s'
+  generateAudio?: boolean;         // Veo: generate_audio, Motion: keep_original_sound
+  negativePrompt?: string;
+  // Veo-only
+  resolution?: '720p' | '1080p' | '4k';
 };
 
 export type TextOverlayConfig = {
@@ -94,6 +101,8 @@ export type TextOverlayConfig = {
   fontFamily?: string;
   textStyle?: string;     // style preset id
   bgColor?: string;
+  paddingLeft?: number;   // pixels from left edge (controls text width / line wrapping)
+  paddingRight?: number;  // pixels from right edge
   entireVideo?: boolean;
   startTime?: number;
   duration?: number;

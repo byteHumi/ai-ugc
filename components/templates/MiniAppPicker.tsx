@@ -40,7 +40,7 @@ export default function MiniAppPicker({ onAdd }: { onAdd: (step: MiniAppStep) =>
               config: createDefaultConfig(app.type),
               enabled: true,
             })}
-            className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-left transition-all duration-150 hover:border-gray-300 hover:bg-gray-50 hover:shadow-sm"
+            className="flex items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3.5 text-left transition-all duration-150 hover:border-[var(--accent-border)] hover:bg-[var(--accent)] hover:shadow-sm"
           >
             <div
               className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
@@ -50,7 +50,7 @@ export default function MiniAppPicker({ onAdd }: { onAdd: (step: MiniAppStep) =>
             </div>
             <div className="min-w-0 pt-0.5">
               <div className="text-sm font-semibold text-[var(--text)]">{app.label}</div>
-              <div className="mt-0.5 text-[11px] leading-snug text-gray-500">{app.description}</div>
+              <div className="mt-0.5 text-[11px] leading-snug text-[var(--text-muted)]">{app.description}</div>
             </div>
           </button>
         );

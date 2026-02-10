@@ -28,9 +28,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'At least one pipeline step must be enabled' }, { status: 400 });
     }
 
-    // Video source validation: need either tiktokUrl or videoUrl unless first step is video-generation
+    // Video source validation: need input video unless first step is subtle-animation (image-to-video)
     const firstStep = enabledSteps[0];
-    const needsInputVideo = firstStep.type !== 'video-generation';
+    const needsInputVideo = !(firstStep.type === 'video-generation'
+      && (firstStep.config as { mode?: string }).mode === 'subtle-animation');
     if (needsInputVideo) {
       if (!tiktokUrl && !videoUrl) {
         return NextResponse.json({ error: 'A video source is required (TikTok URL or uploaded video)' }, { status: 400 });

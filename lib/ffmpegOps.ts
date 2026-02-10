@@ -11,6 +11,28 @@ function getTempDir(): string {
 }
 
 /**
+ * Word-wrap text to fit within a max character width per line.
+ */
+function wrapText(text: string, maxChars: number): string {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+
+  for (const word of words) {
+    if (line.length === 0) {
+      line = word;
+    } else if (line.length + 1 + word.length <= maxChars) {
+      line += ' ' + word;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.join('\n');
+}
+
+/**
  * Burn text onto a video using ffmpeg drawtext filter.
  */
 export function addTextOverlay(
@@ -18,9 +40,31 @@ export function addTextOverlay(
   outputPath: string,
   config: TextOverlayConfig
 ): void {
-  const { text, position, fontSize = 48, fontColor = '#FFFFFF', bgColor, startTime, duration } = config;
+  const {
+    text, position, fontSize = 48, fontColor = '#FFFFFF', bgColor,
+    paddingLeft = 0, paddingRight = 0,
+    startTime, duration,
+  } = config;
 
-  // Position mapping
+  // Word-wrap text if left/right margins are set.
+  // ffmpeg drawtext has no auto-wrap, so we insert newlines manually.
+  // Assume 720px video width; average char width ≈ fontSize * 0.55
+  let wrappedText = text;
+  if (paddingLeft > 0 || paddingRight > 0) {
+    const videoWidth = 720;
+    const availableWidth = videoWidth - paddingLeft - paddingRight;
+    const charWidth = fontSize * 0.55;
+    const maxCharsPerLine = Math.max(5, Math.floor(availableWidth / charWidth));
+    wrappedText = wrapText(text, maxCharsPerLine);
+  }
+
+  // Horizontal offset if left/right margins differ
+  const hOffset = (paddingLeft - paddingRight) / 2;
+  const xExpr = hOffset === 0
+    ? '(w-text_w)/2'
+    : `(w-text_w)/2+${hOffset}`;
+
+  // Vertical position
   let yExpr: string;
   switch (position) {
     case 'top':
@@ -36,9 +80,9 @@ export function addTextOverlay(
   }
 
   // Escape text for ffmpeg drawtext (escape single quotes and backslashes)
-  const escapedText = text.replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/:/g, '\\:');
+  const escapedText = wrappedText.replace(/\\/g, '\\\\').replace(/'/g, "'\\''").replace(/:/g, '\\:');
 
-  let filter = `drawtext=text='${escapedText}':fontsize=${fontSize}:fontcolor=${fontColor}:x=(w-text_w)/2:y=${yExpr}`;
+  let filter = `drawtext=text='${escapedText}':fontsize=${fontSize}:fontcolor=${fontColor}:x=${xExpr}:y=${yExpr}`;
 
   if (bgColor) {
     filter += `:box=1:boxcolor=${bgColor}@0.7:boxborderw=10`;

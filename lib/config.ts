@@ -22,6 +22,16 @@ Maintain photorealism at all times. The result must look like a real person reco
 Preserve the original clothing from the video exactly, including fabric behavior, folds, and movement.
 
 Preserve the original video background, environment, lighting, and depth exactly.`,
+
+  veoPrompt: `Create a natural, lifelike video from the reference image at 30fps, adding subtle, context-appropriate motion that authentically continues or completes the implied action of the subject's current pose while obeying physics—include organic breathing rhythm, micro-expressions, natural eye movements and blinks, gentle weight shifts or gesture completions, realistic motion blur, slight handheld camera shake, and mobile phone camera grain/noise to achieve a raw, spontaneous, impromptu aesthetic that looks like a candid video clip captured on a smartphone, ensuring all movement feels unforced, spontaneous, and perfectly matched to the energy and context of the original pose with environmental interactions like gravity effects on hair and clothing. Audio: refreshing upbeat lo-fi beats.`,
+
+  veoSettings: {
+    aspectRatio: '9:16' as const,
+    duration: '4s' as const,
+    resolution: '720p' as const,
+    generateAudio: true,
+    negativePrompt: 'character talking, mouth moving, speaking',
+  },
 };
 
 export type Job = {

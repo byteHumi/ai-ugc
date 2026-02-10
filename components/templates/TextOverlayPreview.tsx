@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import type { TextOverlayConfig } from '@/types';
 import { TEXT_STYLES } from './textStyles';
 
@@ -17,6 +17,15 @@ export default function TextOverlayPreview({
   const [isDragging, setIsDragging] = useState(false);
   const [dragY, setDragY] = useState<number>(0);
   const [containerHeight, setContainerHeight] = useState(0);
+  const [defaultVideoUrl, setDefaultVideoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (videoUrl) return;
+    fetch('/api/settings/preview_video_url')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data?.value) setDefaultVideoUrl(data.value); })
+      .catch(() => {});
+  }, [videoUrl]);
 
   const activeStyle = useMemo(() => {
     return TEXT_STYLES.find((s) => s.id === (config.textStyle || 'plain'));
@@ -33,6 +42,11 @@ export default function TextOverlayPreview({
     return 'bottom';
   }, [isDragging, dragY, containerHeight, config.position]);
 
+  // Left/right margins control text width (how many words per line)
+  // Scale for preview: preview container is roughly 0.27x of a 720px video
+  const pL = (config.paddingLeft ?? 0) * 0.27;
+  const pR = (config.paddingRight ?? 0) * 0.27;
+
   const getTextStyle = (): React.CSSProperties => {
     const base: React.CSSProperties = {
       fontSize: `${Math.max(10, config.fontSize * 0.3)}px`,
@@ -41,23 +55,21 @@ export default function TextOverlayPreview({
       pointerEvents: 'auto' as const,
       userSelect: 'none' as const,
       cursor: config.position === 'custom' ? 'move' : 'grab',
-      maxWidth: '90%',
+      maxWidth: pL + pR > 0 ? `calc(100% - ${pL + pR}px)` : '90%',
       textAlign: 'center' as const,
       lineHeight: 1.3,
       fontFamily: config.fontFamily || 'sans-serif',
       whiteSpace: 'pre-wrap' as const,
+      wordBreak: 'break-word' as const,
     };
 
     // Apply style preset
     if (activeStyle && activeStyle.id !== 'plain') {
       Object.assign(base, activeStyle.css);
-      // Scale padding for preview
       if (activeStyle.css.padding) {
         base.padding = activeStyle.css.padding;
       }
-      // Keep user's font size
       base.fontSize = `${Math.max(10, config.fontSize * 0.3)}px`;
-      // Keep user's font family if they changed it (unless style overrides)
       if (config.fontFamily && !activeStyle.css.fontFamily) {
         base.fontFamily = config.fontFamily;
       }
@@ -82,6 +94,12 @@ export default function TextOverlayPreview({
     // Position: preset zones with drag support
     base.position = 'absolute';
     base.left = '50%';
+
+    // Shift horizontally if left/right margins differ
+    if (pL !== pR) {
+      const hOffset = (pL - pR) / 2;
+      base.left = `calc(50% + ${hOffset}px)`;
+    }
 
     if (isDragging) {
       base.top = `${dragY}px`;
@@ -175,21 +193,21 @@ export default function TextOverlayPreview({
 
   return (
     <div className="mb-4">
-      <label className="mb-1.5 block text-xs font-medium text-gray-500">
+      <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">
         Preview {config.position === 'custom' ? '— drag to position' : '— drag text to reposition'}
       </label>
       <div
         ref={containerRef}
-        className="relative mx-auto overflow-hidden rounded-xl bg-gray-950"
+        className="relative mx-auto overflow-hidden rounded-xl bg-[#9ca3af] dark:bg-[#2a2a2a]"
         style={{ aspectRatio: '9/16', maxHeight: 340 }}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
       >
         {/* Video or placeholder */}
-        {videoUrl ? (
+        {(videoUrl || defaultVideoUrl) ? (
           <video
-            src={videoUrl}
+            src={videoUrl || defaultVideoUrl!}
             className="h-full w-full object-contain"
             muted
             loop
@@ -200,7 +218,7 @@ export default function TextOverlayPreview({
           <div className="flex h-full w-full items-center justify-center">
             <div className="text-center">
               <div className="mb-1 text-2xl opacity-30">&#9654;</div>
-              <span className="text-[10px] text-gray-600">Video Preview</span>
+              <span className="text-[10px] text-white/40">Video Preview</span>
             </div>
           </div>
         )}
@@ -208,14 +226,14 @@ export default function TextOverlayPreview({
         {/* Drop zone indicators (only for preset positions) */}
         {isDragging && config.position !== 'custom' && (
           <>
-            <div className={`absolute inset-x-3 top-3 flex h-[28%] items-center justify-center rounded-lg border-2 border-dashed transition-all ${zone === 'top' ? 'border-white/40 bg-white/10' : 'border-gray-700/50'}`}>
-              <span className={`text-[10px] font-medium ${zone === 'top' ? 'text-white/60' : 'text-gray-700'}`}>Top</span>
+            <div className={`absolute inset-x-3 top-3 flex h-[28%] items-center justify-center rounded-lg border-2 border-dashed transition-all ${zone === 'top' ? 'border-white/40 bg-white/10' : 'border-white/20'}`}>
+              <span className={`text-[10px] font-medium ${zone === 'top' ? 'text-white/60' : 'text-white/30'}`}>Top</span>
             </div>
-            <div className={`absolute inset-x-3 top-[36%] flex h-[28%] items-center justify-center rounded-lg border-2 border-dashed transition-all ${zone === 'center' ? 'border-white/40 bg-white/10' : 'border-gray-700/50'}`}>
-              <span className={`text-[10px] font-medium ${zone === 'center' ? 'text-white/60' : 'text-gray-700'}`}>Center</span>
+            <div className={`absolute inset-x-3 top-[36%] flex h-[28%] items-center justify-center rounded-lg border-2 border-dashed transition-all ${zone === 'center' ? 'border-white/40 bg-white/10' : 'border-white/20'}`}>
+              <span className={`text-[10px] font-medium ${zone === 'center' ? 'text-white/60' : 'text-white/30'}`}>Center</span>
             </div>
-            <div className={`absolute inset-x-3 bottom-3 flex h-[28%] items-center justify-center rounded-lg border-2 border-dashed transition-all ${zone === 'bottom' ? 'border-white/40 bg-white/10' : 'border-gray-700/50'}`}>
-              <span className={`text-[10px] font-medium ${zone === 'bottom' ? 'text-white/60' : 'text-gray-700'}`}>Bottom</span>
+            <div className={`absolute inset-x-3 bottom-3 flex h-[28%] items-center justify-center rounded-lg border-2 border-dashed transition-all ${zone === 'bottom' ? 'border-white/40 bg-white/10' : 'border-white/20'}`}>
+              <span className={`text-[10px] font-medium ${zone === 'bottom' ? 'text-white/60' : 'text-white/30'}`}>Bottom</span>
             </div>
           </>
         )}
@@ -245,10 +263,10 @@ export default function TextOverlayPreview({
         {/* Position indicator when not dragging and no text (preset modes) */}
         {!isDragging && !config.text && config.position !== 'custom' && (
           <div
-            className="absolute left-1/2 -translate-x-1/2 rounded border border-dashed border-gray-600 px-6 py-1"
+            className="absolute left-1/2 -translate-x-1/2 rounded border border-dashed border-white/30 px-6 py-1"
             style={config.position === 'top' ? { top: '12%' } : config.position === 'center' ? { top: '50%', transform: 'translateX(-50%) translateY(-50%)' } : { bottom: '12%' }}
           >
-            <span className="text-[10px] text-gray-500">Text here</span>
+            <span className="text-[10px] text-white/40">Text here</span>
           </div>
         )}
       </div>

@@ -66,8 +66,8 @@ function FlowConnector() {
   return (
     <div className="flex justify-center">
       <svg width="12" height="28" viewBox="0 0 12 28" fill="none">
-        <path d="M6 0V20" stroke="#d1d5db" strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M2.5 19 L6 26 L9.5 19" fill="#d1d5db" />
+        <path d="M6 0V20" stroke="var(--border)" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M2.5 19 L6 26 L9.5 19" fill="var(--border)" />
       </svg>
     </div>
   );
@@ -109,14 +109,14 @@ function SortableFlowNode({
           <button
             onClick={(e) => { e.stopPropagation(); onToggle(); }}
             className={`rounded-md p-1 transition-colors ${
-              step.enabled ? 'text-gray-400 hover:text-gray-600' : 'text-gray-300 hover:text-gray-400'
+              step.enabled ? 'text-[var(--text-muted)] hover:text-[var(--text)]' : 'text-[var(--border)] hover:text-[var(--text-muted)]'
             }`}
           >
             {step.enabled ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
-            className="rounded-md p-1 text-gray-300 transition-colors hover:text-red-500"
+            className="rounded-md p-1 text-[var(--text-muted)] transition-colors hover:text-red-500"
           >
             <Trash2 className="h-3.5 w-3.5" />
           </button>
@@ -125,11 +125,11 @@ function SortableFlowNode({
         {/* Card */}
         <div
           onClick={onSelect}
-          className={`group flex-1 cursor-pointer rounded-2xl border bg-[var(--surface)] transition-all duration-150 ${
+          className={`group flex-1 cursor-pointer rounded-2xl bg-[var(--surface)] backdrop-blur-xl transition-all duration-150 ${
             isDragging ? 'scale-[1.02] shadow-xl' : ''
           } ${isSelected
-            ? 'border-gray-900 shadow-md'
-            : 'border-[var(--border)] shadow-sm hover:border-gray-300 hover:shadow-md'
+            ? 'ring-1 ring-[var(--primary)] shadow-md'
+            : 'shadow-sm hover:shadow-md'
           } ${!step.enabled ? 'opacity-40' : ''}`}
           style={{ minWidth: 260, maxWidth: 320 }}
         >
@@ -139,7 +139,7 @@ function SortableFlowNode({
               {...attributes}
               {...listeners}
               onClick={(e) => e.stopPropagation()}
-              className="cursor-grab touch-none text-gray-300 opacity-0 transition-opacity group-hover:opacity-100"
+              className="cursor-grab touch-none text-[var(--border)] opacity-0 transition-opacity group-hover:opacity-100"
             >
               <GripVertical className="h-3.5 w-3.5" />
             </button>
@@ -156,10 +156,10 @@ function SortableFlowNode({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="text-[13px] font-semibold text-[var(--text)]">{meta.label}</span>
-                <span className="text-[11px] text-gray-400">#{index + 1}</span>
+                <span className="text-[11px] text-[var(--text-muted)]">#{index + 1}</span>
               </div>
               <div className="mt-0.5 flex items-center gap-1.5">
-                <span className="truncate text-[11px] text-gray-500">{summary}</span>
+                <span className="truncate text-[11px] text-[var(--text-muted)]">{summary}</span>
                 {step.type === 'attach-video' && (step.config as AttachVideoConfig).sourceStepId && (() => {
                   const refIdx = steps.findIndex((s) => s.id === (step.config as AttachVideoConfig).sourceStepId);
                   if (refIdx === -1) return null;
@@ -177,7 +177,7 @@ function SortableFlowNode({
               {step.enabled && (
                 <div className={`h-2 w-2 rounded-full ${isConfigured ? 'bg-emerald-500' : 'bg-amber-400'}`} />
               )}
-              <ChevronRight className="h-4 w-4 text-gray-300" />
+              <ChevronRight className="h-4 w-4 text-[var(--border)]" />
             </div>
           </div>
         </div>
@@ -237,39 +237,35 @@ export default function PipelineBuilder({
 
   return (
     <div
-      className="relative rounded-2xl border border-[var(--border)] bg-[var(--background)]"
-      style={{
-        backgroundImage: 'radial-gradient(circle, #e5e7eb 0.5px, transparent 0.5px)',
-        backgroundSize: '24px 24px',
-      }}
+      className="relative rounded-2xl"
     >
       <div className="flex flex-col items-center px-6 py-10">
         {/* Source Node */}
         <div
           onClick={() => onSelect('source')}
-          className={`group cursor-pointer rounded-2xl border bg-[var(--surface)] transition-all duration-150 ${
+          className={`group cursor-pointer rounded-2xl bg-[var(--surface)] backdrop-blur-xl transition-all duration-150 ${
             selectedId === 'source'
-              ? 'border-gray-900 shadow-md'
-              : 'border-[var(--border)] shadow-sm hover:border-gray-300 hover:shadow-md'
+              ? 'ring-1 ring-[var(--primary)] shadow-md'
+              : 'shadow-sm hover:shadow-md'
           }`}
           style={{ minWidth: 260, maxWidth: 320 }}
         >
           <div className="flex items-center gap-3 px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100">
-              <Upload className="h-4 w-4 text-gray-500" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)]">
+              <Upload className="h-4 w-4 text-[var(--text-muted)]" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="text-[13px] font-semibold text-[var(--text)]">Video Source</span>
-                <span className="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                <span className="rounded bg-[var(--accent)] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[var(--text-muted)]">
                   {videoSource}
                 </span>
               </div>
-              <div className="mt-0.5 truncate text-[11px] text-gray-500">{sourceSummary}</div>
+              <div className="mt-0.5 truncate text-[11px] text-[var(--text-muted)]">{sourceSummary}</div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <div className={`h-2 w-2 rounded-full ${sourceHasValue ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-              <ChevronRight className="h-4 w-4 text-gray-300" />
+              <ChevronRight className="h-4 w-4 text-[var(--border)]" />
             </div>
           </div>
         </div>
@@ -299,34 +295,34 @@ export default function PipelineBuilder({
         {/* Add Step */}
         <button
           onClick={() => setShowPicker(true)}
-          className="group flex items-center gap-2 rounded-2xl border border-dashed border-gray-300 bg-[var(--surface)]/80 px-5 py-2.5 transition-all duration-150 hover:border-gray-400 hover:shadow-sm"
+          className="group flex items-center gap-2 rounded-2xl bg-[var(--surface)] px-5 py-2.5 shadow-sm transition-all duration-150 hover:shadow-md"
           style={{ minWidth: 200, backdropFilter: 'blur(4px)' }}
         >
-          <Plus className="h-4 w-4 text-gray-400 transition-colors group-hover:text-gray-600" />
-          <span className="text-sm font-medium text-gray-400 transition-colors group-hover:text-gray-600">Add Step</span>
+          <Plus className="h-4 w-4 text-[var(--text-muted)] transition-colors group-hover:text-[var(--text)]" />
+          <span className="text-sm font-medium text-[var(--text-muted)] transition-colors group-hover:text-[var(--text)]">Add Step</span>
         </button>
 
         <FlowConnector />
 
         {/* Output Node */}
         <div
-          className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] shadow-sm"
+          className="rounded-2xl bg-[var(--surface)] backdrop-blur-xl shadow-sm"
           style={{ minWidth: 200 }}
         >
           <div className="flex items-center gap-3 px-4 py-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-100">
-              <Play className="h-4 w-4 text-gray-500" />
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--accent)]">
+              <Play className="h-4 w-4 text-[var(--text-muted)]" />
             </div>
             <div className="flex-1">
               <div className="text-[13px] font-semibold text-[var(--text)]">Output</div>
-              <div className="text-[11px] text-gray-500">
+              <div className="text-[11px] text-[var(--text-muted)]">
                 {enabledCount} step{enabledCount !== 1 ? 's' : ''} in pipeline
               </div>
             </div>
             {enabledCount > 0 && (
               <div className="flex items-center gap-1.5">
                 <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                <span className="text-[11px] font-medium text-gray-500">Ready</span>
+                <span className="text-[11px] font-medium text-[var(--text-muted)]">Ready</span>
               </div>
             )}
           </div>

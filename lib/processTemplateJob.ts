@@ -180,35 +180,75 @@ async function processStep(
       const falImageUrl = await uploadImageToFal(imageUrl, jobId);
 
       if (cfg.mode === 'subtle-animation') {
-        // Kling image-to-video
-        const result = await fal.subscribe('fal-ai/kling-video/v2/master/image-to-video', {
+        // Veo 3.1 image-to-video
+        const veo = config.veoSettings;
+        const result = await fal.subscribe('fal-ai/veo3.1/image-to-video', {
           input: {
             image_url: falImageUrl,
-            prompt: cfg.prompt || 'subtle natural movement',
-            duration: (cfg.maxSeconds && cfg.maxSeconds >= 10 ? '10' : '5') as '5' | '10',
+            prompt: cfg.prompt || config.veoPrompt,
+            aspect_ratio: cfg.aspectRatio || veo.aspectRatio,
+            duration: cfg.duration || veo.duration,
+            resolution: cfg.resolution || veo.resolution,
+            generate_audio: cfg.generateAudio ?? veo.generateAudio,
+            negative_prompt: cfg.negativePrompt || veo.negativePrompt,
           },
           logs: true,
+          onQueueUpdate: (update) => {
+            if (update.status === 'IN_PROGRESS') {
+              update.logs?.map((log) => log.message).forEach(console.log);
+            }
+          },
         });
 
         const videoData = (result.data as { video?: { url?: string } })?.video ?? (result as { video?: { url?: string } }).video;
-        if (!videoData?.url) throw new Error('No video URL from image-to-video');
+        if (!videoData?.url) throw new Error('No video URL from Veo 3.1 image-to-video');
 
         const outputPath = path.join(tempDir, `tpl-step-${stepIndex}-${Date.now()}.mp4`);
         await downloadFile(videoData.url, outputPath);
         return outputPath;
       } else {
-        // Motion control — needs input video
-        const falVideoUrl = await prepareVideoForFal(currentVideoPath, cfg.maxSeconds || 10, `${jobId}-step${stepIndex}`);
+        // Motion control — needs input video (currentVideoPath is already local)
+        const maxSec = cfg.maxSeconds || 10;
+        const duration = getVideoDuration(currentVideoPath);
+        let videoToUpload = currentVideoPath;
+        let trimmedPath: string | undefined;
+
+        if (duration > maxSec) {
+          trimmedPath = path.join(tempDir, `tpl-mc-trimmed-${stepIndex}-${Date.now()}.mp4`);
+          trimVideo(currentVideoPath, trimmedPath, maxSec);
+          videoToUpload = trimmedPath;
+        }
+
+        let falVideoUrl: string;
+        try {
+          const buffer = fs.readFileSync(videoToUpload);
+          falVideoUrl = await uploadBuffer(buffer, 'video/mp4', `tpl-mc-${jobId}-step${stepIndex}.mp4`);
+        } finally {
+          if (trimmedPath) try { fs.unlinkSync(trimmedPath); } catch {}
+        }
 
         const result = await fal.subscribe('fal-ai/kling-video/v2.6/standard/motion-control', {
           input: {
             image_url: falImageUrl,
             video_url: falVideoUrl,
             character_orientation: 'video',
-            keep_original_sound: true,
+            keep_original_sound: cfg.generateAudio ?? true,
             prompt: cfg.prompt || config.prompt,
           },
           logs: true,
+          onQueueUpdate: async (update) => {
+            if (update.status === 'IN_QUEUE') {
+              const pos = (update as { queue_position?: number }).queue_position;
+              await updateTemplateJob(jobId, {
+                step: `Step ${stepIndex + 1}: Motion Control — queued${pos != null ? ` (position ${pos})` : ''}`,
+              }).catch(() => {});
+            } else if (update.status === 'IN_PROGRESS') {
+              await updateTemplateJob(jobId, {
+                step: `Step ${stepIndex + 1}: Motion Control — processing...`,
+              }).catch(() => {});
+              update.logs?.map((log) => log.message).forEach(console.log);
+            }
+          },
         });
 
         const videoData = (result.data as { video?: { url?: string } })?.video ?? (result as { video?: { url?: string } }).video;
@@ -382,7 +422,9 @@ function getStepLabel(step: MiniAppStep): string {
   switch (step.type) {
     case 'video-generation': {
       const cfg = step.config as VideoGenConfig;
-      return cfg.mode === 'subtle-animation' ? 'Generating video (Subtle Animation)' : 'Generating video (Motion Control)';
+      return cfg.mode === 'subtle-animation'
+        ? 'Generating video (Veo 3.1 Subtle Animation)'
+        : 'Generating video (Kling Motion Control)';
     }
     case 'text-overlay':
       return 'Adding text overlay';

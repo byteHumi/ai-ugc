@@ -30,7 +30,7 @@ type SourceConfig = {
 };
 
 export default function NodeConfigPanel({
-  selectedId, steps, onUpdateStep, onRemoveStep, onClose, sourceConfig, videoUrl,
+  selectedId, steps, onUpdateStep, onRemoveStep, onClose, sourceConfig, videoUrl, sourceDuration,
 }: {
   selectedId: string | null;
   steps: MiniAppStep[];
@@ -39,6 +39,7 @@ export default function NodeConfigPanel({
   onClose: () => void;
   sourceConfig: SourceConfig;
   videoUrl?: string;
+  sourceDuration?: number;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const step = selectedId && selectedId !== 'source' ? steps.find((s) => s.id === selectedId) : null;
@@ -46,15 +47,15 @@ export default function NodeConfigPanel({
   /* ── Source node ── */
   if (selectedId === 'source') {
     return (
-      <div className="h-full border-l border-[var(--border)] bg-[var(--surface)]">
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3.5">
+      <div className="h-full bg-transparent">
+        <div className="flex items-center justify-between shadow-sm px-4 py-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gray-100">
-              <Upload className="h-3.5 w-3.5 text-gray-500" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--accent)]">
+              <Upload className="h-3.5 w-3.5 text-[var(--text-muted)]" />
             </div>
             <span className="text-sm font-semibold text-[var(--text)]">Video Source</span>
           </div>
-          <button onClick={onClose} className="rounded-md p-1 text-gray-400 transition-colors hover:text-gray-600">
+          <button onClick={onClose} className="rounded-md p-1 text-[var(--text-muted)] transition-colors hover:text-[var(--text)]">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -66,8 +67,8 @@ export default function NodeConfigPanel({
                 onClick={() => sourceConfig.onVideoSourceChange(src)}
                 className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-150 ${
                   sourceConfig.videoSource === src
-                    ? 'bg-gray-900 text-white'
-                    : 'border border-[var(--border)] text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                    ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                    : 'border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--accent)] hover:text-[var(--text)]'
                 }`}
               >
                 {src === 'tiktok' ? 'TikTok URL' : 'Upload Video'}
@@ -77,24 +78,24 @@ export default function NodeConfigPanel({
 
           {sourceConfig.videoSource === 'tiktok' ? (
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">TikTok URL</label>
+              <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">TikTok URL</label>
               <input
                 value={sourceConfig.tiktokUrl}
                 onChange={(e) => sourceConfig.onTiktokUrlChange(e.target.value)}
                 placeholder="https://www.tiktok.com/@user/video/..."
-                className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+                className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-border)] focus:outline-none"
               />
             </div>
           ) : (
             <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">Video File</label>
+              <label className="mb-1 block text-xs font-medium text-[var(--text-muted)]">Video File</label>
               <input ref={fileRef} type="file" accept="video/*" onChange={sourceConfig.onVideoUpload} className="hidden" />
               {sourceConfig.videoUrl ? (
                 <div className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-2.5">
-                  <video src={sourceConfig.videoUrl} className="h-16 w-12 shrink-0 rounded-lg object-cover bg-gray-950" muted playsInline preload="metadata" onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }} />
+                  <video src={sourceConfig.videoUrl} className="h-16 w-12 shrink-0 rounded-lg object-cover bg-black" muted playsInline preload="metadata" onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }} />
                   <div className="flex-1 min-w-0">
                     <p className="truncate text-xs font-medium text-[var(--text)]">{sourceConfig.uploadedFilename}</p>
-                    <button onClick={sourceConfig.onVideoRemove} className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-400 hover:text-red-500 transition-colors">
+                    <button onClick={sourceConfig.onVideoRemove} className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--text-muted)] hover:text-red-500 transition-colors">
                       <X className="h-3 w-3" /> Remove
                     </button>
                   </div>
@@ -103,26 +104,26 @@ export default function NodeConfigPanel({
                 <button
                   onClick={() => fileRef.current?.click()}
                   disabled={sourceConfig.isUploading}
-                  className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-[var(--background)] py-6 transition-colors hover:border-gray-400 hover:bg-gray-50"
+                  className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--background)] py-6 transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--accent)]"
                 >
                   {sourceConfig.isUploading ? (
                     <>
-                      <div className="h-6 w-6 rounded-full border-2 border-gray-300 border-t-gray-900 animate-spin" />
-                      <span className="text-xs tabular-nums text-gray-500">Uploading\u2026 {sourceConfig.uploadProgress}%</span>
+                      <div className="h-6 w-6 rounded-full border-2 border-[var(--border)] border-t-[var(--foreground)] animate-spin" />
+                      <span className="text-xs tabular-nums text-[var(--text-muted)]">Uploading\u2026 {sourceConfig.uploadProgress}%</span>
                     </>
                   ) : (
                     <>
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100">
-                        <Upload className="h-3.5 w-3.5 text-gray-400" />
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--accent)]">
+                        <Upload className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                       </div>
-                      <span className="text-xs text-gray-400">Click to upload video</span>
+                      <span className="text-xs text-[var(--text-muted)]">Click to upload video</span>
                     </>
                   )}
                 </button>
               )}
             </div>
           )}
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10px] text-[var(--text-muted)]">
             Not needed if the first step is Video Generation with Subtle Animation mode.
           </p>
         </div>
@@ -136,8 +137,8 @@ export default function NodeConfigPanel({
     const Icon = meta.icon;
 
     return (
-      <div className="flex h-full flex-col border-l border-[var(--border)] bg-[var(--surface)]">
-        <div className="flex items-center justify-between border-b border-[var(--border)] px-4 py-3.5">
+      <div className="flex h-full flex-col bg-transparent">
+        <div className="flex items-center justify-between shadow-sm px-4 py-3.5">
           <div className="flex items-center gap-2.5">
             <div
               className="flex h-7 w-7 items-center justify-center rounded-lg"
@@ -147,7 +148,7 @@ export default function NodeConfigPanel({
             </div>
             <span className="text-sm font-semibold text-[var(--text)]">{meta.label}</span>
           </div>
-          <button onClick={onClose} className="rounded-md p-1 text-gray-400 transition-colors hover:text-gray-600">
+          <button onClick={onClose} className="rounded-md p-1 text-[var(--text-muted)] transition-colors hover:text-[var(--text)]">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -160,16 +161,16 @@ export default function NodeConfigPanel({
               videoUrl={videoUrl}
             />
           )}
-          {step.type === 'video-generation' && <VideoGenConfig config={step.config as VGC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} />}
+          {step.type === 'video-generation' && <VideoGenConfig config={step.config as VGC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} sourceDuration={sourceDuration} />}
           {step.type === 'text-overlay' && <TextOverlayConfig config={step.config as TOC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} />}
           {step.type === 'bg-music' && <BgMusicConfig config={step.config as BMC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} />}
           {step.type === 'attach-video' && <AttachVideoConfig config={step.config as AVC} onChange={(c) => onUpdateStep(step.id, { ...step, config: c })} steps={steps} currentStepId={step.id} />}
         </div>
 
-        <div className="border-t border-[var(--border)] p-4">
+        <div className="shadow-[0_-1px_2px_rgba(0,0,0,0.05)] p-4">
           <button
             onClick={() => { onRemoveStep(step.id); onClose(); }}
-            className="w-full rounded-lg border border-gray-200 py-2 text-xs font-medium text-gray-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+            className="w-full rounded-lg border border-[var(--border)] py-2 text-xs font-medium text-[var(--text-muted)] transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600 dark:hover:border-red-900 dark:hover:bg-red-950"
           >
             Remove Step
           </button>
@@ -180,12 +181,12 @@ export default function NodeConfigPanel({
 
   /* ── Empty state ── */
   return (
-    <div className="flex h-full flex-col items-center justify-center border-l border-[var(--border)] bg-[var(--surface)] p-6 text-center">
-      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100">
-        <Video className="h-5 w-5 text-gray-400" />
+    <div className="flex h-full flex-col items-center justify-center bg-transparent p-6 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-[var(--accent)]">
+        <Video className="h-5 w-5 text-[var(--text-muted)]" />
       </div>
-      <p className="text-sm font-medium text-gray-600">Select a step</p>
-      <p className="mt-1 text-xs text-gray-400">Click a node to edit its settings</p>
+      <p className="text-sm font-medium text-[var(--text)]">Select a step</p>
+      <p className="mt-1 text-xs text-[var(--text-muted)]">Click a node to edit its settings</p>
     </div>
   );
 }

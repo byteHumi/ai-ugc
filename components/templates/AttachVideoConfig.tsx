@@ -82,7 +82,7 @@ export default function AttachVideoConfig({
     <div className="space-y-5">
       {/* Position */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-gray-500">Position</label>
+        <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Position</label>
         <div className="flex gap-2">
           {(['before', 'after'] as const).map((pos) => (
             <button
@@ -90,8 +90,8 @@ export default function AttachVideoConfig({
               onClick={() => onChange({ ...config, position: pos })}
               className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-150 ${
                 config.position === pos
-                  ? 'bg-gray-900 text-white'
-                  : 'border border-[var(--border)] text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : 'border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--accent)] hover:text-[var(--text)]'
               }`}
             >
               {pos === 'before' ? 'Prepend (Before)' : 'Append (After)'}
@@ -102,7 +102,7 @@ export default function AttachVideoConfig({
 
       {/* Video Source Toggle */}
       <div>
-        <label className="mb-1.5 block text-xs font-medium text-gray-500">Video Source</label>
+        <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Video Source</label>
         <div className="flex gap-2">
           {sourceOptions.map((opt) => (
             <button
@@ -110,8 +110,8 @@ export default function AttachVideoConfig({
               onClick={() => handleSourceChange(opt.key)}
               className={`flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-150 ${
                 activeSource === opt.key
-                  ? 'bg-gray-900 text-white'
-                  : 'border border-[var(--border)] text-gray-500 hover:bg-gray-50 hover:text-gray-700'
+                  ? 'bg-[var(--primary)] text-[var(--primary-foreground)]'
+                  : 'border border-[var(--border)] text-[var(--text-muted)] hover:bg-[var(--accent)] hover:text-[var(--text)]'
               }`}
             >
               {opt.label}
@@ -123,12 +123,12 @@ export default function AttachVideoConfig({
       {/* TikTok URL mode */}
       {activeSource === 'tiktok' && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-gray-500">TikTok URL</label>
+          <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">TikTok URL</label>
           <input
             value={config.tiktokUrl || ''}
             onChange={(e) => onChange({ ...config, tiktokUrl: e.target.value, videoUrl: '', sourceStepId: undefined })}
             placeholder="https://www.tiktok.com/@user/video/..."
-            className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-gray-400 focus:border-gray-400 focus:outline-none"
+            className="w-full rounded-lg border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm text-[var(--text)] placeholder:text-[var(--text-muted)] focus:border-[var(--accent-border)] focus:outline-none"
           />
         </div>
       )}
@@ -136,14 +136,14 @@ export default function AttachVideoConfig({
       {/* Upload mode */}
       {activeSource === 'upload' && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-gray-500">Video Clip</label>
+          <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Video Clip</label>
           <input ref={fileRef} type="file" accept="video/*" onChange={handleUpload} className="hidden" />
 
           {config.videoUrl ? (
             <div className="flex items-center gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-2.5">
               <video
                 src={config.videoUrl}
-                className="h-16 w-24 shrink-0 rounded-lg object-cover bg-gray-950"
+                className="h-16 w-24 shrink-0 rounded-lg object-cover bg-black"
                 muted playsInline preload="metadata"
                 onLoadedMetadata={(e) => { e.currentTarget.currentTime = 0.1; }}
               />
@@ -151,7 +151,7 @@ export default function AttachVideoConfig({
                 <p className="truncate text-xs font-medium text-[var(--text)]">{uploadedFilename || 'Video clip'}</p>
                 <button
                   onClick={() => { onChange({ ...config, videoUrl: '' }); setUploadedFilename(null); }}
-                  className="mt-0.5 flex items-center gap-1 text-[11px] text-gray-400 hover:text-red-500 transition-colors"
+                  className="mt-0.5 flex items-center gap-1 text-[11px] text-[var(--text-muted)] hover:text-red-500 transition-colors"
                 >
                   <X className="h-3 w-3" /> Remove
                 </button>
@@ -161,19 +161,19 @@ export default function AttachVideoConfig({
             <button
               onClick={() => fileRef.current?.click()}
               disabled={isUploading}
-              className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-gray-300 bg-[var(--background)] py-6 transition-colors hover:border-gray-400 hover:bg-gray-50"
+              className="flex w-full flex-col items-center gap-2 rounded-xl border border-dashed border-[var(--border)] bg-[var(--background)] py-6 transition-colors hover:border-[var(--accent-border)] hover:bg-[var(--accent)]"
             >
               {isUploading ? (
                 <>
-                  <div className="h-8 w-8 rounded-full border-2 border-gray-300 border-t-gray-900 animate-spin" />
-                  <span className="text-xs tabular-nums text-gray-500">Uploading… {progress}%</span>
+                  <div className="h-8 w-8 rounded-full border-2 border-[var(--border)] border-t-[var(--foreground)] animate-spin" />
+                  <span className="text-xs tabular-nums text-[var(--text-muted)]">Uploading… {progress}%</span>
                 </>
               ) : (
                 <>
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-100">
-                    <Upload className="h-4 w-4 text-gray-400" />
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--accent)]">
+                    <Upload className="h-4 w-4 text-[var(--text-muted)]" />
                   </div>
-                  <span className="text-xs text-gray-400">Click to upload video clip</span>
+                  <span className="text-xs text-[var(--text-muted)]">Click to upload video clip</span>
                 </>
               )}
             </button>
@@ -184,7 +184,7 @@ export default function AttachVideoConfig({
       {/* Pipeline mode */}
       {activeSource === 'pipeline' && (
         <div>
-          <label className="mb-1.5 block text-xs font-medium text-gray-500">Select Step Output</label>
+          <label className="mb-1.5 block text-xs font-medium text-[var(--text-muted)]">Select Step Output</label>
           <div className="space-y-2">
             {previousSteps.map((s, i) => {
               const StepIcon = stepIcons[s.type];
@@ -195,21 +195,21 @@ export default function AttachVideoConfig({
                   onClick={() => onChange({ ...config, sourceStepId: s.id, videoUrl: '', tiktokUrl: undefined })}
                   className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all duration-150 ${
                     isSelected
-                      ? 'border-gray-900 bg-gray-50 shadow-sm'
-                      : 'border-[var(--border)] bg-[var(--background)] hover:border-gray-300'
+                      ? 'border-[var(--primary)] bg-[var(--accent)] shadow-sm'
+                      : 'border-[var(--border)] bg-[var(--background)] hover:border-[var(--accent-border)]'
                   }`}
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100">
-                    <StepIcon className="h-3.5 w-3.5 text-gray-500" />
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)]">
+                    <StepIcon className="h-3.5 w-3.5 text-[var(--text-muted)]" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium text-[var(--text)]">
                       {stepLabels[s.type]}
-                      <span className="ml-1.5 text-gray-400">#{i + 1}</span>
+                      <span className="ml-1.5 text-[var(--text-muted)]">#{i + 1}</span>
                     </p>
                   </div>
                   {isSelected && (
-                    <Link className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                    <Link className="h-3.5 w-3.5 shrink-0 text-[var(--text-muted)]" />
                   )}
                 </button>
               );

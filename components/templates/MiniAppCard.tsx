@@ -73,7 +73,7 @@ export default function MiniAppCard({
         <button
           onClick={() => onUpdate({ ...step, enabled: !step.enabled })}
           className={`relative h-5 w-9 rounded-full transition-colors ${
-            step.enabled ? 'bg-[var(--primary)]' : 'bg-gray-300'
+            step.enabled ? 'bg-[var(--primary)]' : 'bg-[var(--muted)]'
           }`}
         >
           <span
