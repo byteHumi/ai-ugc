@@ -33,7 +33,9 @@ export async function GET() {
       })
     );
 
-    return NextResponse.json(jobsWithSignedUrls);
+    return NextResponse.json(jobsWithSignedUrls, {
+      headers: { 'Cache-Control': 'no-store, max-age=0' },
+    });
   } catch (err) {
     console.error('List template jobs error:', err);
     return NextResponse.json({ error: 'Failed to list template jobs' }, { status: 500 });

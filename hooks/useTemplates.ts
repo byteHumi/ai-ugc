@@ -58,7 +58,7 @@ export function useTemplates() {
     const timeout = setTimeout(() => ac.abort(), FETCH_TIMEOUT);
 
     try {
-      const res = await fetch('/api/templates', { signal: ac.signal });
+      const res = await fetch('/api/templates', { signal: ac.signal, cache: 'no-store' });
       clearTimeout(timeout);
       if (!mountedRef.current) return;
       if (!res.ok) return; // silently skip bad responses
@@ -123,6 +123,9 @@ export function useTemplates() {
   }, [loadJobs, scheduleNext]);
 
   const refresh = useCallback(async () => {
+    // Cancel any pending poll so it can't abort our refresh fetch
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
     setRefreshing(true);
     lastSnapshotRef.current = '';
     await loadJobs();
