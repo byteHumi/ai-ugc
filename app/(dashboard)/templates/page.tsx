@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import Spinner from '@/components/ui/Spinner';
 import Modal from '@/components/ui/Modal';
-import type { MiniAppStep } from '@/types';
+import type { MiniAppStep, VideoGenConfig, TextOverlayConfig, BgMusicConfig, AttachVideoConfig, BatchVideoGenConfig } from '@/types';
 
 const DRAFT_KEY = 'ai-ugc-pipeline-draft';
 
@@ -55,6 +55,7 @@ export default function TemplatesPage() {
   const [sourceDuration, setSourceDuration] = useState<number | undefined>(() => draft.current?.sourceDuration);
   const [previewUrl, setPreviewUrl] = useState(() => draft.current?.previewUrl ?? '');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<Map<string, string>>(new Map());
 
   // Auto-save draft to sessionStorage on changes
   useEffect(() => {
@@ -186,8 +187,10 @@ export default function TemplatesPage() {
     }
 
     const firstStep = enabledSteps[0];
-    const needsInputVideo = !(firstStep.type === 'video-generation'
-      && (firstStep.config as { mode?: string }).mode === 'subtle-animation');
+    const needsInputVideo = !(
+      (firstStep.type === 'video-generation' && (firstStep.config as { mode?: string }).mode === 'subtle-animation') ||
+      (firstStep.type === 'batch-video-generation' && (firstStep.config as { mode?: string }).mode === 'subtle-animation')
+    );
 
     if (needsInputVideo) {
       if (videoSource === 'tiktok' && !tiktokUrl) {
@@ -201,6 +204,46 @@ export default function TemplatesPage() {
         return;
       }
     }
+
+    // Validate each enabled step has required fields
+    const errors = new Map<string, string>();
+    for (const s of enabledSteps) {
+      switch (s.type) {
+        case 'video-generation': {
+          const c = s.config as VideoGenConfig;
+          if (!c.imageId && !c.imageUrl) errors.set(s.id, 'Select a model image');
+          break;
+        }
+        case 'batch-video-generation': {
+          const c = s.config as BatchVideoGenConfig;
+          if (!c.images || c.images.length === 0) errors.set(s.id, 'Select at least one image');
+          break;
+        }
+        case 'text-overlay': {
+          const c = s.config as TextOverlayConfig;
+          if (!c.text?.trim()) errors.set(s.id, 'Enter overlay text');
+          break;
+        }
+        case 'bg-music': {
+          const c = s.config as BgMusicConfig;
+          if (!c.trackId && !c.customTrackUrl) errors.set(s.id, 'Select a music track');
+          break;
+        }
+        case 'attach-video': {
+          const c = s.config as AttachVideoConfig;
+          if (!c.videoUrl && !c.sourceStepId && !c.tiktokUrl) errors.set(s.id, 'Add a video source');
+          break;
+        }
+      }
+    }
+    if (errors.size > 0) {
+      setValidationErrors(errors);
+      const first = errors.entries().next().value;
+      if (first) setSelectedNodeId(first[0]);
+      showToast(`${errors.size} step${errors.size > 1 ? 's' : ''} need${errors.size === 1 ? 's' : ''} configuration`, 'error');
+      return;
+    }
+    setValidationErrors(new Map());
 
     setIsSubmitting(true);
     try {
@@ -222,13 +265,16 @@ export default function TemplatesPage() {
       }
 
       const data = await res.json();
-      // Store new job so /jobs page shows it instantly
-      try {
-        sessionStorage.setItem('ai-ugc-new-job', JSON.stringify(data));
-        sessionStorage.removeItem(DRAFT_KEY);
-      } catch {}
-      showToast('Pipeline started!', 'success');
-      router.push('/jobs');
+      const isBatch = data.isBatch === true;
+      // Store new job so /jobs page shows it instantly (only for single pipelines)
+      if (!isBatch) {
+        try {
+          sessionStorage.setItem('ai-ugc-new-job', JSON.stringify(data));
+        } catch {}
+      }
+      try { sessionStorage.removeItem(DRAFT_KEY); } catch {}
+      showToast(isBatch ? `Batch started with ${data.totalJobs} pipeline runs!` : 'Pipeline started!', 'success');
+      router.push(isBatch ? '/jobs?tab=batch' : '/jobs');
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Failed to start pipeline', 'error');
     } finally {
@@ -298,6 +344,7 @@ export default function TemplatesPage() {
             videoSource={videoSource}
             tiktokUrl={tiktokUrl}
             videoUrl={videoUrl}
+            validationErrors={validationErrors}
           />
         </div>
 
@@ -335,9 +382,10 @@ export default function TemplatesPage() {
               <NodeConfigPanel
                 selectedId={selectedNodeId}
                 steps={steps}
-                onUpdateStep={handleUpdateStep}
+                onUpdateStep={(id, updated) => { handleUpdateStep(id, updated); setValidationErrors((prev) => { const next = new Map(prev); next.delete(id); return next; }); }}
                 onRemoveStep={handleRemoveStep}
                 onClose={() => { setSelectedNodeId(null); if (isMobile) setPanelOpen(false); }}
+                validationError={selectedNodeId && selectedNodeId !== 'source' ? validationErrors.get(selectedNodeId) : undefined}
                 sourceConfig={{
                   videoSource,
                   tiktokUrl,

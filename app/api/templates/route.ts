@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createTemplateJob, getAllTemplateJobs, initDatabase } from '@/lib/db';
+import { createTemplateJob, getAllTemplateJobs, createPipelineBatch, updatePipelineBatch, initDatabase } from '@/lib/db';
 import { getCachedSignedUrl } from '@/lib/signedUrlCache';
 import { processTemplateJob } from '@/lib/processTemplateJob';
+import type { MiniAppStep, BatchVideoGenConfig, VideoGenConfig } from '@/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,10 @@ export async function GET() {
     // Only sign completed jobs that have a GCS output URL.
     // Each signing has a 5s timeout to prevent the whole request from hanging.
     const jobsWithSignedUrls = await Promise.all(
-      jobs.map(async (job: { status?: string; outputUrl?: string; [key: string]: unknown }) => {
+      jobs.map(async (job: { status?: string; outputUrl?: string; stepResults?: { stepId: string; type: string; label: string; outputUrl: string; signedUrl?: string }[]; [key: string]: unknown }) => {
+        const result = { ...job };
+
+        // Sign final output URL
         if (
           job.status === 'completed' &&
           job.outputUrl &&
@@ -24,12 +28,33 @@ export async function GET() {
               getCachedSignedUrl(job.outputUrl),
               new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), 5000)),
             ]);
-            return { ...job, signedUrl };
+            result.signedUrl = signedUrl;
           } catch {
-            return { ...job, signedUrl: job.outputUrl };
+            result.signedUrl = job.outputUrl;
           }
         }
-        return job;
+
+        // Sign step result URLs
+        if (Array.isArray(job.stepResults) && job.stepResults.length > 0) {
+          result.stepResults = await Promise.all(
+            job.stepResults.map(async (sr) => {
+              if (sr.outputUrl?.includes('storage.googleapis.com')) {
+                try {
+                  const signed = await Promise.race([
+                    getCachedSignedUrl(sr.outputUrl),
+                    new Promise<string>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000)),
+                  ]);
+                  return { ...sr, signedUrl: signed };
+                } catch {
+                  return { ...sr, signedUrl: sr.outputUrl };
+                }
+              }
+              return sr;
+            })
+          );
+        }
+
+        return result;
       })
     );
 
@@ -57,7 +82,109 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'At least one pipeline step must be enabled' }, { status: 400 });
     }
 
-    // Video source validation: need input video unless first step is subtle-animation (image-to-video)
+    // Check if any enabled step is batch-video-generation
+    const batchStep = enabledSteps.find((s: MiniAppStep) => s.type === 'batch-video-generation');
+
+    if (batchStep) {
+      // ── Batch pipeline path ──
+      const batchConfig = batchStep.config as BatchVideoGenConfig;
+      const images = batchConfig.images || [];
+
+      if (images.length === 0) {
+        return NextResponse.json({ error: 'Batch Video Gen step requires at least one image' }, { status: 400 });
+      }
+
+      // Video source validation for batch: check if non-batch steps need input video
+      // The batch step replaces itself with video-generation, so check if resulting pipeline needs input video
+      const firstEnabled = enabledSteps[0];
+      const batchIsFirst = firstEnabled.id === batchStep.id;
+      const batchModeIsSubtle = batchConfig.mode === 'subtle-animation';
+
+      if (batchIsFirst && !batchModeIsSubtle) {
+        // Motion control needs input video
+        if (!tiktokUrl && !videoUrl) {
+          return NextResponse.json({ error: 'A video source is required for Motion Control mode' }, { status: 400 });
+        }
+      } else if (!batchIsFirst) {
+        // Batch step is not first, so we need to check if the first step needs input video
+        const needsInputVideo = !(firstEnabled.type === 'video-generation'
+          && (firstEnabled.config as { mode?: string }).mode === 'subtle-animation');
+        if (needsInputVideo && !tiktokUrl && !videoUrl) {
+          return NextResponse.json({ error: 'A video source is required (TikTok URL or uploaded video)' }, { status: 400 });
+        }
+      }
+
+      // Create the pipeline batch record
+      const batch = await createPipelineBatch({
+        name,
+        pipeline,
+        totalJobs: images.length,
+      });
+
+      if (!batch) {
+        return NextResponse.json({ error: 'Failed to create pipeline batch' }, { status: 500 });
+      }
+
+      // For each image: clone pipeline, replace batch-video-generation with regular video-generation
+      const childJobs = [];
+      for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const clonedPipeline: MiniAppStep[] = pipeline.map((step: MiniAppStep) => {
+          if (step.id === batchStep.id) {
+            // Replace with regular video-generation containing this single image
+            const singleConfig: VideoGenConfig = {
+              mode: batchConfig.mode,
+              imageId: img.imageId,
+              imageUrl: img.imageUrl,
+              prompt: batchConfig.prompt,
+              aspectRatio: batchConfig.aspectRatio,
+              duration: batchConfig.duration,
+              generateAudio: batchConfig.generateAudio,
+              negativePrompt: batchConfig.negativePrompt,
+              resolution: batchConfig.resolution,
+              maxSeconds: batchConfig.maxSeconds,
+            };
+            return {
+              ...step,
+              type: 'video-generation' as const,
+              config: singleConfig,
+            };
+          }
+          return { ...step };
+        });
+
+        const jobName = `${name} #${i + 1}${img.filename ? ` (${img.filename})` : ''}`;
+        const job = await createTemplateJob({
+          name: jobName,
+          pipeline: clonedPipeline,
+          videoSource: videoUrl ? 'upload' : 'tiktok',
+          tiktokUrl: tiktokUrl || null,
+          videoUrl: videoUrl || null,
+          pipelineBatchId: batch.id,
+        });
+        childJobs.push(job);
+      }
+
+      // Update batch status to processing
+      await updatePipelineBatch(batch.id, { status: 'processing' });
+
+      // Fire and forget all child jobs
+      for (const job of childJobs) {
+        if (job) {
+          processTemplateJob(job.id).catch((err) => {
+            console.error(`processTemplateJob error (batch child ${job.id}):`, err);
+          });
+        }
+      }
+
+      return NextResponse.json({
+        ...batch,
+        isBatch: true,
+        childJobIds: childJobs.filter(Boolean).map((j) => j!.id),
+      });
+    }
+
+    // ── Single pipeline path (unchanged) ──
     const firstStep = enabledSteps[0];
     const needsInputVideo = !(firstStep.type === 'video-generation'
       && (firstStep.config as { mode?: string }).mode === 'subtle-animation');
@@ -73,6 +200,7 @@ export async function POST(request: NextRequest) {
       videoSource: videoUrl ? 'upload' : 'tiktok',
       tiktokUrl: tiktokUrl || null,
       videoUrl: videoUrl || null,
+      pipelineBatchId: null,
     });
 
     if (!job) {
